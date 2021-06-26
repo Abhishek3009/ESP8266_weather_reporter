@@ -10,12 +10,14 @@
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSansBoldOblique9pt7b.h>
 
+// defining macros for the 128x64 OLED display
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //=========================================================================================================================================================================================
+// All the weather icons and humidity and windspeed icon required for display
 static const uint8_t image_data_humidity[32] = {
     0x00, 0x00, 
     0x01, 0x00, 
@@ -351,17 +353,19 @@ static const uint8_t image_data_rain[200] = {
 };
 
 
+//========================================================================================================================================================================================= 
+
+String get_data(String link);                                                       //this fucntion performs GET request on a given link and returns the response
+
+void drawIcon();                                                                    //this function displays the icons according to acquired data.
+
 //=========================================================================================================================================================================================
+// Required variables
+const char *ssid     = "YOUR_WIFI_NAME";
+const char *password = "PASSWORD";
 
-String get_data(String link);
-String getDate();
-void drawIcon();
-
-const char *ssid     = "Abhi's wifi";
-const char *password = "zappp10000";
-
-const long utcOffsetInSeconds = 19800;
-char daysOfTheWeek[7][12] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+const long utcOffsetInSeconds = 19800;                                              //this is set in seconds according to +5:30 GMT. Convert it according to your timezone. 
+char daysOfTheWeek[7][12] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};      //to get day string
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 
@@ -369,124 +373,131 @@ uint32_t forecast = 0;
 String jsonBuffer,curr_time,location,icon,description;
 double temperature, t_max, wind_s;
 int humidity;
-String weather_link = "http://api.openweathermap.org/data/2.5/weather?q=Pune&appid=85ab1507a0a5ec77465d0e7ea6cb8bb4";
+String weather_link = "http://api.openweathermap.org/data/2.5/weather?q=YOUR_LOCATION&appid=YOUR_API_KEY";      //Change your location and provide your API key which is available on your account.
 unsigned long lastTime = 0;
-unsigned long timerDelay = 10000;
+unsigned long timerDelay = 600000;                                                  //After every 10 minutes the data will be updated
+                                                                                    //Note the value 600000 is in miliseconds. You can lower it for testing
 
 /***************************************************************************************************************************************************************************/
 
 void setup() {
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
+  
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {                                  //initialising the OLED display
     Serial.println(F("SSD1306 allocation failed"));
     for(;;); // Don't proceed, loop forever
   }
   delay(2000);
 
-  Serial.begin(115200);
+  Serial.begin(115200);                                                             //Initialising the Serial communication
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid, password);                                                       //Connecting to WiFi
   while ( WiFi.status() != WL_CONNECTED ) {
     delay ( 500 );
     Serial.print ( "." );
   }
-  timeClient.begin();
+  timeClient.begin();                                                               //initialize the NTP client to get date and time from an NTP server.
 }
 
 /***************************************************************************************************************************************************************************/
 
 void loop() {
-  timeClient.update();
-  String currentDay = daysOfTheWeek[timeClient.getDay()]+String(" ");
-  curr_time = timeClient.getFormattedTime();
+  timeClient.update();                                                              //Update request by time client
+  String currentDay = daysOfTheWeek[timeClient.getDay()]+String(" ");               //Getting the day from the reponse
+  curr_time = timeClient.getFormattedTime();                                        //Getting the time
 //============================================================================================================================================================================
-  display.clearDisplay();
+  display.clearDisplay();                                                           //Displaying the day
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(50,0);
   display.print(currentDay);
 //============================================================================================================================================================================ 
-  display.setTextSize(1);
+  display.setTextSize(1);                                                           //Displaying the time
   display.setTextColor(WHITE);
 //  display.setCursor(75,10);
   display.println(curr_time);
 //============================================================================================================================================================================ 
-  if ((millis() - lastTime) > timerDelay) {
-    jsonBuffer = get_data(weather_link);
-    Serial.println(jsonBuffer);
-    JSONVar myObject = JSON.parse(jsonBuffer);
+  if ((millis() - lastTime) > timerDelay) {                                         //Timer for updating the weather data
+    jsonBuffer = get_data(weather_link);                                            //function call for requesting weather data
+    Serial.println(jsonBuffer);                                                     //Check the serial output for the results. Helpful while developing and error finding
+    JSONVar myObject = JSON.parse(jsonBuffer);                                      //JSON library for converting string
     if (JSON.typeof(myObject) == "undefined") {
       Serial.println("Parsing input failed!");
     }
-    temperature = (double)myObject["main"]["temp"];
+    temperature = (double)myObject["main"]["temp"];                                 //All the data required to be displayed from the request saved in the variables
     t_max = (double)myObject["main"]["temp_max"];
     location = (const char*)myObject["name"];
     humidity = int(myObject["main"]["humidity"]);
     wind_s = (double)myObject["wind"]["speed"];
     icon = (const char*)myObject["weather"][0]["icon"];
-    description = (const char*)myObject["weather"][0]["main```````````````"];
+    description = (const char*)myObject["weather"][0]["main"];
     Serial.println(icon);
     lastTime = millis();
   }
-  display.setTextSize(1);
-  display.setFont(&FreeSansBoldOblique9pt7b);
+//============================================================================================================================================================================
+  display.setTextSize(1);                                                           //DISPLAY LOCATION
+  display.setFont(&FreeSansBoldOblique9pt7b);                                       //Change of font
   display.setCursor(0,12);
-  display.println(location);
-  display.setTextSize(2);
-  display.setFont();
+  display.println(location);                                                        
+//============================================================================================================================================================================
+  display.setTextSize(2);                                                           //DISPLAY TEMPERATURE
+  display.setFont();                                                                //default font
   display.setCursor(0,16);
-  display.print(temperature-273.00,1);
-  display.print((char)247); // degree symbol 
+  display.print(temperature-273.00,1);                                              //Kelvin to Celcius
+  display.print((char)247);                                                         // degree symbol ASCII
   display.println("C");
-  display.setTextSize(1);
+//============================================================================================================================================================================
+  display.setTextSize(1);                                                           //DISPLAY MAX TEMPERATURE OF THE DAY
   display.setCursor(0,36);
   display.print("Max: ");
   display.print(t_max-273.00,1);
   display.print((char)247); // degree symbol 
   display.println("C");
-  display.drawBitmap(0,48,image_data_humidity,14,16,1);
+//============================================================================================================================================================================
+  display.drawBitmap(0,48,image_data_humidity,14,16,1);                             //DISPLAY HUMIDITY
   display.setCursor(16,52);
   display.print(humidity);
-  display.drawBitmap(29,48,image_data_windspeed,17,14,1);
+//============================================================================================================================================================================
+  display.drawBitmap(29,48,image_data_windspeed,17,14,1);                           //DISPLAY WINDSPEED
   display.setCursor(49,52);
   display.print(wind_s,1);
-  display.print("  ");
+//============================================================================================================================================================================
+  display.print("  ");                                                              //DISPLAY THE DESCRIPTION
   display.print(description);
-  drawIcon();
+  drawIcon();                                                                       //icon display
   display.display();
   delay(1000);
 }
 
 /***************************************************************************************************************************************************************************/
 
-String get_data(String link){
-  String payload;
+String get_data(String link){                                                       //function for get request
+  String payload;                                                                   //data buffer
   if(WiFi.status()== WL_CONNECTED){
     WiFiClient client;
     HTTPClient http;
     Serial.print("[HTTP] begin...\n");
-    if (http.begin(client, link)){
+    if (http.begin(client, link)){                                                  //Connecting the client to the server
 
       Serial.print("[HTTP] GET...\n");
-      int httpCode = http.GET();
+      int httpCode = http.GET();                                                    //GET request on the connection
 
-      if (httpCode > 0) {
+      if (httpCode > 0) {                                                           //Checking the response
         Serial.printf("[HTTP] GET... code: %d\n", httpCode);
         if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-          payload = http.getString();
-          Serial.println(payload);
+          payload = http.getString();                                               //returning the response
           return payload;
         }
       }
       else {
         Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
-        payload = "request failed";
+        payload = "request failed";                                                 //request failure
         return payload;
       }
 
-      http.end();
+      http.end();                                                                   //end connection
     } 
     else {
-      Serial.printf("[HTTP} Unable to connect\n");
+      Serial.printf("[HTTP} Unable to connect\n");                                  //failed to connect
       payload = "connection failed";
       return payload;
     }
@@ -494,50 +505,64 @@ String get_data(String link){
 }
 
 /***************************************************************************************************************************************************************************/
-void drawIcon() {
+void drawIcon() {                                                           
   if (icon.equals("01d")) {
     // 01d - Sun
   display.drawBitmap(78,14,image_data_sun,40,40,1);
-  } else if (icon.equals("01n")) {
+  } 
+  else if (icon.equals("01n")) {
     // 01d - Sun - night
   display.drawBitmap(78,14,image_data_moon,40,40,1);
-  } else if (icon.equals("02d")) {
+  } 
+  else if (icon.equals("02d")) {
     // 02d - Cloud, sun
   display.drawBitmap(78,14,image_data_sun_fewcloud,40,40,1);
-  } else if (icon.equals("02n")) {
+  } 
+  else if (icon.equals("02n")) {
     // 02d - Cloud, sun - night
   display.drawBitmap(78,14,image_data_moon_fewcloud,40,40,1);
-  } else if ( (icon.equals("03d"))||(icon.equals("03n"))  ) {
+  } 
+  else if ( (icon.equals("03d"))||(icon.equals("03n"))  ) {
     // 03d - Cloud
   display.drawBitmap(78,14,image_data_cloudy,40,40,1);
-  } else if ( (icon.equals("04d"))  ) {
+  } 
+  else if ( (icon.equals("04d"))  ) {
     // 04d - Cloud, second cloud
   display.drawBitmap(78,14,image_data_cloudy,40,40,1);
-  } else if ( (icon.equals("04n"))  ) {
+  }
+  else if ( (icon.equals("04n"))  ) {
     // 04d - Cloud, second cloud - night
   display.drawBitmap(78,14,image_data_cloudy,40,40,1);
-  } else if ( (icon.equals("09d"))  ) {
+  } 
+  else if ( (icon.equals("09d"))  ) {
     // 09d - Clouds, rain
   display.drawBitmap(78,14,image_data_rain,40,40,1);
-  } else if ( (icon.equals("09n"))  ) {
+  } 
+  else if ( (icon.equals("09n"))  ) {
     // 09d - Clouds, rain - night
   display.drawBitmap(78,14,image_data_rain,40,40,1);
-  } else if ( (icon.equals("10d"))  ) {
+  }
+  else if ( (icon.equals("10d"))  ) {
     // 10d - Clouds, sun, rain
   display.drawBitmap(78,14,image_data_rain,40,40,1);
-  } else if ( (icon.equals("10n"))  ) {
+  }
+  else if ( (icon.equals("10n"))  ) {
     // 10d - Clouds, sun, rain - night
   display.drawBitmap(78,14,image_data_rain,40,40,1);
-  } else if ( (icon.equals("11d"))  ) {
+  }
+  else if ( (icon.equals("11d"))  ) {
     // 11d - Clouds, lightning
   display.drawBitmap(78,14,image_data_thunder,40,40,1);
-  } else if ( (icon.equals("11n"))  ) {
+  } 
+  else if ( (icon.equals("11n"))  ) {
     // 11d - Clouds, lightning - night
   display.drawBitmap(78,14,image_data_thunder,40,40,1);
-  } else if ( (icon.equals("13d"))   ||  (icon.equals("13n"))  ) {
+  }
+  else if ( (icon.equals("13d"))   ||  (icon.equals("13n"))  ) {
     // 13d - Snow
   display.drawBitmap(78,14,image_data_sun,40,40,1);
-  } else {
+  } 
+  else {
     // 50d - Fog
   display.drawBitmap(78,14,image_data_sun,40,40,1);
   }
